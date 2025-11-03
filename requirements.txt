@@ -3,3 +3,5 @@ langgraph
 langchain[openai]
 langchain-anthropic
 mcp[cli]
+# For web fetch tool 
+mcp-server-fetch

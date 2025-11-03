@@ -21,6 +21,29 @@
       "env": {
         "DAPPIER_API_KEY": "{DAPPIER_API_KEY}"
       }
+    },
+    "audioscrape": {
+      "transport": "http",
+      "url": "https://mcp.audioscrape.com",
+      "headers": {
+        "Authorization": "{AUDIOSCRAPE_API_KEY}"
+      }
+    },
+    "favicon-generator": {
+        "command": "uvx",
+        "args": ["auto-favicon"],
+        "env": {}
+    },
+    "serper-search": {
+      "command": "npx",
+      "args": ["-y", "serper-search-scrape-mcp-server"],
+      "env": {
+        "SERPER_API_KEY": "{SERPER_API_KEY}"
+      }
+    },
+    "fetch": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "mcp/fetch"]
     }
   }
 }

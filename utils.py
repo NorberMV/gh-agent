@@ -14,6 +14,7 @@ def read_config(config_file: Path):
     for name, server in servers.items():
         if "command" in server and "transport" not in server:
             server["transport"] = "stdio"
+        # Only set default transport for URL-based servers if not explicitly set
         if "url" in server and "transport" not in server:
             server["transport"] = "streamable_http"
 
