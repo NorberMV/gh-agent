@@ -1,3 +1,4 @@
+import json
 import os
 import asyncio
 import sys
@@ -5,10 +6,12 @@ from pathlib import Path
 
 from langchain_mcp_adapters.client import MultiServerMCPClient  
 from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
 
 from tools import think_tool
 from prompts import GITHUB_AGENT_SYSTEM_MESSAGE, PODCAST_AGENT_SYSTEM_MESSAGE, ARTICLES_SEARCH_AGENT_SYSTEM_MESSAGE
 from utils import read_config
+from models import ArticlesItems, PodcastItems
 
 from dotenv import load_dotenv
 
@@ -59,7 +62,7 @@ async def main():
         message.pretty_print()
 
 
-async def create_podcast_agent():
+async def old_create_podcast_agent():
     """Create a separate agent for the Audioscrape podcast server."""
     config_file_path = Path(__file__).parent.resolve() / "mcp_config.json"
     
@@ -102,6 +105,41 @@ async def create_podcast_agent():
     return agent
 
 
+async def create_podcast_agent():
+    """Create a separate agent for podcast searching using serper-search server."""
+    config_file_path = Path(__file__).parent.resolve() / "mcp_config.json"
+    
+    # Read all servers and use serper-search
+    all_servers = read_config(config_file_path)
+    podcast_servers = {
+        "serper-search": all_servers["serper-search"]
+    }
+    
+    # Set up authentication for serper-search if API key is provided
+    serper_api_key = os.environ.get("SERPER_API_KEY")
+    if serper_api_key:
+        podcast_servers["serper-search"]["env"]["SERPER_API_KEY"] = serper_api_key
+    else:
+        print("⚠️  Warning: SERPER_API_KEY not found in environment variables.")
+        print("   The serper-search server may require authentication.")
+    
+    client = MultiServerMCPClient(podcast_servers)
+    
+    # Get tools from serper-search server (google_search, scrape)
+    tools = await client.get_tools()
+    tools.append(think_tool)
+    print(f"Podcast agent tools available: {len(tools)}")
+    
+    # Create the agent with podcast-specific prompt
+    agent = create_agent(
+        "google_genai:gemini-2.5-pro",
+        system_prompt=PODCAST_AGENT_SYSTEM_MESSAGE,
+        tools=tools,
+        response_format=ToolStrategy(PodcastItems),
+    )
+    
+    return agent
+
 async def run_podcast_agent():
     """Run the podcast agent with a sample query."""
     podcast_agent = await create_podcast_agent()
@@ -123,28 +161,23 @@ async def run_podcast_agent():
     print(f"\n📻 Podcast Agent Response:\n")
     for message in response["messages"]:
         message.pretty_print()
+    
+    result = response["structured_response"]
+    podcasts_list = result.model_dump()
+    print(json.dumps(podcasts_list, indent=4))
 
 
 async def create_articles_agent():
-    """Create a separate agent for article searching using dappier, serper-search, fetch, and favicon-generator servers."""
+    """Create a separate agent for article searching using serper-search, fetch, and favicon-generator servers."""
     config_file_path = Path(__file__).parent.resolve() / "mcp_config.json"
     
-    # Read all servers and use dappier, serper-search, fetch, and favicon-generator
+    # Read all servers and use serper-search, fetch, and favicon-generator
     all_servers = read_config(config_file_path)
     article_servers = {
-        "dappier": all_servers["dappier"],
         "serper-search": all_servers["serper-search"],
         "fetch": all_servers["fetch"],
         "favicon-generator": all_servers["favicon-generator"]
     }
-    
-    # Set up authentication for dappier if API key is provided
-    dappier_api_key = os.environ.get("DAPPIER_API_KEY")
-    if dappier_api_key:
-        article_servers["dappier"]["env"]["DAPPIER_API_KEY"] = dappier_api_key
-    else:
-        print("⚠️  Warning: DAPPIER_API_KEY not found in environment variables.")
-        print("   The dappier server may require authentication.")
     
     # Set up authentication for serper-search if API key is provided
     serper_api_key = os.environ.get("SERPER_API_KEY")
@@ -156,16 +189,18 @@ async def create_articles_agent():
     
     client = MultiServerMCPClient(article_servers)
     
-    # Get tools from all four servers (dappier, serper-search, fetch, favicon-generator)
+    # Get tools from all three servers (serper-search, fetch, favicon-generator)
     tools = await client.get_tools()
     tools.append(think_tool)
     print(f"Articles search agent tools available: {len(tools)}")
     
     # Create the agent with articles search-specific prompt
     agent = create_agent(
-        "claude-sonnet-4-5-20250929",
+        # "claude-sonnet-4-5-20250929",
+        "google_genai:gemini-2.5-pro",
         system_prompt=ARTICLES_SEARCH_AGENT_SYSTEM_MESSAGE,
         tools=tools,
+        response_format=ToolStrategy(ArticlesItems),
     )
     
     return agent
@@ -197,6 +232,9 @@ async def run_articles_agent():
     for message in response["messages"]:
         message.pretty_print()
 
+    result = response["structured_response"]
+    articles_list = result.model_dump()
+    print(json.dumps(articles_list, indent=4))
 
 if __name__ == "__main__":
     # Check which agent the user wants to run

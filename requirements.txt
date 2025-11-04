@@ -5,3 +5,9 @@ langchain-anthropic
 mcp[cli]
 # For web fetch tool 
 mcp-server-fetch
+
+# to use gemini models
+langchain-google-genai
+
+# For data models
+pydantic
